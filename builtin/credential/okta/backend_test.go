@@ -51,7 +51,13 @@ func TestBackend_Config(t *testing.T) {
 	username := os.Getenv("OKTA_USERNAME")
 	password := os.Getenv("OKTA_PASSWORD")
 	token := os.Getenv("OKTA_API_TOKEN")
-	groupIDs := createOktaGroups(t, username, token, os.Getenv("OKTA_ORG"))
+	org := os.Getenv("OKTA_ORG")
+	for _, i := range []string{username, password, token, org} {
+		if i == "" {
+			t.SkipNow()
+		}
+	}
+	groupIDs := createOktaGroups(t, username, token, org)
 	defer deleteOktaGroups(t, token, os.Getenv("OKTA_ORG"), groupIDs)
 
 	configData := map[string]interface{}{
