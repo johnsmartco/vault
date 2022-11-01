@@ -42,7 +42,7 @@ scenario "autopilot" {
     module = "build_${matrix.artifact_source}"
 
     variables {
-      build_tags            = try(var.vault_local_build_tags, local.build_tags[matrix.edition])
+      build_tags            = var.vault_local_build_tags != null ? var.vault_local_build_tags : local.build_tags[matrix.edition]
       bundle_path           = local.bundle_path
       goarch                = matrix.arch
       goos                  = "linux"
@@ -85,7 +85,7 @@ scenario "autopilot" {
     module = module.read_license
 
     variables {
-      file_name = abspath(joinpath(path.root, "./support/vault.hclic"))
+      file_name = var.vault_license_path != null ? var.vault_license_path : abspath(joinpath(path.root, "./support/vault.hclic"))
     }
   }
 

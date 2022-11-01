@@ -12,7 +12,6 @@ env:
   GO_TAGS: "ui"
 
 jobs:
-
   product-metadata:
     runs-on: ubuntu-latest
     outputs:
@@ -25,19 +24,16 @@ jobs:
       - uses: actions/setup-go@v3
       - name: Get product revision
         id: get-product-revision
-        run: echo "::set-output name=product-revision::$(git rev-parse HEAD)"
+        run: echo "product-revision=$(make crt-get-revision)" >> $GITHUB_OUTPUT
       - name: Get product version
         id: get-product-version
         run: |
-          make version
-          IFS="-" read BASE_VERSION _other <<< "$(make version)"
-          echo "::set-output name=product-version::$(make version)"
-          echo "::set-output name=product-base-version::${BASE_VERSION}"
+          echo "product-version=$(make crt-get-version)" >> $GITHUB_OUTPUT
+          echo "product-base-version=$(make crt-get-base-version)" >> $GITHUB_OUTPUT
       - name: Get build date
         id: get-build-date
         run: |
-          make build-date
-          echo "::set-output name=build-date::$(make build-date)"
+          echo "build-date=$(make crt-get-date)" >> $GITHUB_OUTPUT
 
   generate-metadata-file:
     needs: product-metadata
@@ -46,25 +42,25 @@ jobs:
       filepath: ${{ steps.generate-metadata-file.outputs.filepath }}
     steps:
       - name: 'Checkout directory'
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Generate metadata file
         id: generate-metadata-file
         uses: hashicorp/actions-generate-metadata@v1
         with:
           version: ${{ needs.product-metadata.outputs.product-version }}
           product: ${{ env.PKG_NAME }}
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: metadata.json
           path: ${{ steps.generate-metadata-file.outputs.filepath }}
 
   build-other:
-    needs: [ product-metadata ]
+    needs: product-metadata
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goos: [ freebsd, windows, netbsd, openbsd, solaris ]
-        goarch: [ "386", "amd64", "arm" ]
+        goos: [freebsd, windows, netbsd, openbsd, solaris]
+        goarch: ["386", "amd64", "arm"]
         exclude:
           - goos: solaris
             goarch: 386
@@ -73,87 +69,67 @@ jobs:
           - goos: windows
             goarch: arm
       fail-fast: true
-
     name: Go ${{ matrix.goos }} ${{ matrix.goarch }} build
-
     steps:
-      - uses: actions/checkout@v2
-      - name: Setup go
+      - uses: actions/checkout@v3
+      - name: Set up go
         uses: actions/setup-go@v3
         with:
           go-version-file: go.mod
-      - name: Setup node and yarn
-        uses: actions/setup-node@v2
+      - name: Set up node and yarn
+        uses: actions/setup-node@v3
         with:
-          node-version: '14'
-          cache: 'yarn'
-          cache-dependency-path: 'ui/yarn.lock'
+          node-version: 14
+          cache: yarn
+          cache-dependency-path: ui/yarn.lock
       - name: UI Build
-        run: |
-          cd ui
-          yarn install --ignore-optional
-          npm rebuild node-sass
-          yarn --verbose run build
-          cd ..
+        run: make crt-build-ui
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
-        run: |
-          mkdir dist out
-          GO_TAGS="${{ env.GO_TAGS }}" VAULT_VERSION=${{ needs.product-metadata.outputs.product-base-version }} VAULT_REVISION="$(git rev-parse HEAD)" VAULT_BUILD_DATE="${{ needs.product-metadata.outputs.build-date }}" make build
-          zip -r -j out/${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip dist/
-      - uses: actions/upload-artifact@v2
+          BUNDLE_PATH: out/${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+        run: make crt-build crt-bundle
+      - uses: actions/upload-artifact@v3
         with:
           name: ${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
           path: out/${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
 
   build-linux:
-    needs: [ product-metadata ]
+    needs: product-metadata
     runs-on: ubuntu-latest
     strategy:
       matrix:
         goos: [linux]
         goarch: ["arm", "arm64", "386", "amd64"]
       fail-fast: true
-
     name: Go ${{ matrix.goos }} ${{ matrix.goarch }} build
-
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Setup go
+      - uses: actions/checkout@v3
+      - name: Set up go
         uses: actions/setup-go@v3
         with:
           go-version-file: go.mod
-      - name: Setup node and yarn
-        uses: actions/setup-node@v2
+      - name: Set up node and yarn
+        uses: actions/setup-node@v3
         with:
-          node-version: '14'
-          cache: 'yarn'
-          cache-dependency-path: 'ui/yarn.lock'
+          node-version: 14
+          cache: yarn
+          cache-dependency-path: ui/yarn.lock
       - name: UI Build
-        run: |
-          cd ui
-          yarn install --ignore-optional
-          npm rebuild node-sass
-          yarn --verbose run build
-          cd ..
+        run: make crt-build-ui
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
-        run: |
-          mkdir dist out
-          GO_TAGS="${{ env.GO_TAGS }}" VAULT_VERSION=${{ needs.product-metadata.outputs.product-base-version }} VAULT_REVISION="$(git rev-parse HEAD)" VAULT_BUILD_DATE="${{ needs.product-metadata.outputs.build-date }}" make build
-          zip -r -j out/${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip dist/
-      - uses: actions/upload-artifact@v2
+          BUNDLE_PATH: out/${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+        run: make crt-build crt-bundle
+      - uses: actions/upload-artifact@v3
         with:
           name: ${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
           path: out/${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
-
       - name: Package
         uses: hashicorp/actions-packaging-linux@v1
         with:
@@ -175,56 +151,47 @@ jobs:
         run: |
           echo "RPM_PACKAGE=$(basename out/*.rpm)" >> $GITHUB_ENV
           echo "DEB_PACKAGE=$(basename out/*.deb)" >> $GITHUB_ENV
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: ${{ env.RPM_PACKAGE }}
           path: out/${{ env.RPM_PACKAGE }}
-
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: ${{ env.DEB_PACKAGE }}
           path: out/${{ env.DEB_PACKAGE }}
 
   build-darwin:
-    needs: [ product-metadata ]
+    needs: product-metadata
     runs-on: macos-latest
     strategy:
       matrix:
-        goos: [ darwin ]
-        goarch: [ "amd64", "arm64" ]
+        goos: [darwin]
+        goarch: ["amd64", "arm64"]
       fail-fast: true
     name: Go ${{ matrix.goos }} ${{ matrix.goarch }} build
     steps:
-      - uses: actions/checkout@v2
-
-      - name: Setup go
+      - uses: actions/checkout@v3
+      - name: Set up go
         uses: actions/setup-go@v3
         with:
           go-version-file: go.mod
-      - name: Setup node and yarn
-        uses: actions/setup-node@v2
+      - name: Set up node and yarn
+        uses: actions/setup-node@v3
         with:
-          node-version: '14'
-          cache: 'yarn'
-          cache-dependency-path: 'ui/yarn.lock'
+          node-version: 14
+          cache: yarn
+          cache-dependency-path: ui/yarn.lock
       - name: UI Build
-        run: |
-          cd ui
-          yarn install --ignore-optional
-          npm rebuild node-sass
-          yarn --verbose run build
-          cd ..
+        run: make crt-build-ui
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           GO_TAGS: "${{ env.GO_TAGS }} netcgo"
           CGO_ENABLED: 0
-        run: |
-          mkdir dist out
-          GO_TAGS="${{ env.GO_TAGS }}" VAULT_VERSION=${{ needs.product-metadata.outputs.product-base-version }} VAULT_REVISION="$(git rev-parse HEAD)" VAULT_BUILD_DATE="${{ needs.product-metadata.outputs.build-date }}" make build
-          zip -r -j out/${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip dist/
-      - uses: actions/upload-artifact@v2
+          BUNDLE_PATH: out/${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+        run: make crt-build crt-bundle
+      - uses: actions/upload-artifact@v3
         with:
           name: ${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
           path: out/${{ env.PKG_NAME }}_${{ needs.product-metadata.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
@@ -242,7 +209,7 @@ jobs:
       repo: ${{github.event.repository.name}}
       version: ${{needs.product-metadata.outputs.product-version}}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Docker Build (Action)
         uses: hashicorp/actions-docker-build@v1
         with:

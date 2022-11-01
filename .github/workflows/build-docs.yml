@@ -1,0 +1,19 @@
+---
+name: build-docs
+
+on:
+  push:
+    branches:
+      - docs/**
+      - backport/docs/**
+
+jobs:
+  # Our branch protection rules require that the build workflow has succeeded for
+  # every pull request. This validation is performed by build-ensure-success workflow
+  # that is triggered after the build workflow has completed. Since we skip the
+  # normal build workflow for docs PRs, this workflow runs on docs branches so that
+  # we can trigger the required build-ensure-success workflow.
+  trigger-build-success-workflow:
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 0
